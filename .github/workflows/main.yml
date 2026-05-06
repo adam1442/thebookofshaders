@@ -1,4 +1,4 @@
-name: 📘 ساخت کتاب (PDF +- HTML) – نسخه قطعی
+name: 📘 ساخت PDF و HTML کتاب (مطابق مستندات رسمی)
 
 on:
   workflow_dispatch:
@@ -7,57 +7,53 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 دریافت کدهای کتاب
+      # ۱. کلون بازگشتی (با submoduleها)
+      - name: 📥 دریافت کد کتاب
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: 🧰 نصب بسته‌های پیش‌نیاز
+      # ۲. نصب پیش‌نیازها
+      - name: 🧰 نصب بسته‌های لازم
         run: |
           sudo apt-get update
-          # ابزارهای اصلی ساخت PDF و EPUB
-          sudo apt-get install -y texlive-xetex texlive-latex-extra texlive-fonts-recommended pandoc make wget
-          # پایتون (نیاز به python و pip)
-          sudo apt-get install -y python3 python3-pip python-is-python3
+          # ابزارهای PDF
+          sudo apt-get install -y texlive-xetex texlive-latex-extra pandoc python3 python3-pip make wget
           pip3 install markdown
-          # کتابخانه‌های گرافیکی + Xvfb برای glslViewer
-          sudo apt-get install -y libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libgl1 libglfw3 xvfb
-          # نصب glslViewer (نسخه ۳.۵.۲) از ریلیز گیت‌هاب (بدون نیاز به اینترنت خارجی)
+          # PHP (برای ساخت سایت آفلاین)
+          sudo apt-get install -y php-cli
+          # glslViewer
           GLSL_VERSION="3.5.2"
           wget -q "https://github.com/patriciogonzalezvivo/glslViewer/releases/download/${GLSL_VERSION}/glslViewer-${GLSL_VERSION}-amd64.deb" -O glslViewer.deb
           dpkg-deb -x glslViewer.deb glsl_extract
           sudo cp glsl_extract/usr/bin/glslViewer /usr/local/bin/
+          # گرافیک
+          sudo apt-get install -y libgl1 libglfw3 xvfb
 
-      # ساخت PDF و EPUB
-      - name: 📄 ساخت PDF و EPUB کتاب
-        run: xvfb-run make pdf epub
+      # ۳. ساخت PDF (دقیقاً مطابق Appendix 02)
+      - name: 📄 ساخت PDF
+        run: xvfb-run make pdf
 
-      # کامپایل glue از سورس داخل مخزن (بدون نیاز به اینترنت)
-      - name: ⚙️ ساخت glue
+      # ۴. ساخت نسخه HTML آفلاین (دقیقاً مطابق Appendix 00)
+      - name: 🌐 ساخت سایت HTML
         run: |
-          cd glue
-          go build -o glue .
-          cd ..
+          # راه‌اندازی سرور PHP داخلی روی پورت 8000 در پس‌زمینه
+          php -S localhost:8000 > /dev/null 2>&1 &
+          sleep 3
+          # آینه کردن وب‌سایت
+          mkdir -p website_mirror
+          cd website_mirror
+          wget --mirror --convert-links --adjust-extension --no-parent --wait=1 --random-wait http://localhost:8000/ || true
+          if [ -d "localhost:8000" ]; then
+            mv localhost:8000/* .
+            rm -rf localhost:8000
+          fi
 
-      # ساخت سایت HTML با glue
-      - name: 🌐 ساخت سایت HTML آفلاین
-        run: ./glue/glue build glue.json
-
-      # جمع‌آوری همه خروجی‌ها در یک پوشه
-      - name: 📁 انتقال خروجی‌ها به پوشه output
-        run: |
-          mkdir -p output
-          [ -f book.pdf ] && cp book.pdf output/
-          [ -f book.epub ] && cp book.epub output/
-          [ -d "_site" ] && cp -r _site output/website_mirror
-
-      # بررسی جهت اطمینان (در لاگ نمایش داده می‌شود)
-      - name: 🔍 فهرست فایل‌های خروجی
-        run: ls -lR output/
-
-      # کامیت نهایی
-      - name: 💾 ذخیره در مخزن
+      # ۵. ذخیره‌سازی خروجی‌ها
+      - name: 💾 کامیت فایل‌ها
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '📚 کتاب کامل ساخته شد (PDF و HTML)'
-          file_pattern: 'output/*'
+          commit_message: '📚 کتاب آماده شد (PDF و HTML)'
+          file_pattern: 'book.pdf website_mirror/*'
           commit_user_name: 'GitHub Action'
           commit_user_email: 'action@github.com'
