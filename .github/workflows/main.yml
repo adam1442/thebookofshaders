@@ -1,72 +1,60 @@
-name: 📘 ساخت PDF و HTML کتاب (روی فورک)
+name: 📘 ساخت PDF و HTML کتاب (مستقیم از فورک)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:        # <-- دکمه اجرای دستی اضافه شد
+  push:
+    tags:
+      - v*
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       # ۱. دریافت کدهای کتاب از فورک
-      - name: 📥 Checkout فورک
+      - name: 📥 Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ۲. بسته‌های اصلی
+      # ۲. نصب تمام پیش‌نیازها (فقط از گیت‌هاب/apt، بدون PPA)
       - name: 🧰 نصب بسته‌های سیستم
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            texlive-xetex texlive-latex-extra texlive-fonts-recommended \
-            pandoc python3 make wget gettext binutils xvfb
+          # ابزارهای اصلی ساخت PDF و EPUB
+          sudo apt-get install -y texlive-xetex texlive-latex-extra texlive-fonts-recommended pandoc python3 python3-pip make wget
+          # کتابخانه‌های X11 برای glslViewer
+          sudo apt-get install -y libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 x11-utils xvfb
 
-      # ۳. نصب glslViewer (نسخه ۳.۵.۲)
+      # ۳. نصب glslViewer (نسخه درست و بدون نیاز به PPA)
       - name: 🎨 نصب glslViewer
         run: |
           GLSL_VERSION="3.5.2"
           wget -q "https://github.com/patriciogonzalezvivo/glslViewer/releases/download/${GLSL_VERSION}/glslViewer-${GLSL_VERSION}-amd64.deb" -O glslViewer.deb
-          mkdir -p glsl_extract
+          mkdir glsl_extract
           dpkg-deb -x glslViewer.deb glsl_extract
           sudo cp glsl_extract/usr/bin/glslViewer /usr/local/bin/
-          glslViewer --version || echo "⚠️ هشدار: glslViewer نتیجه نداد، ولی ساخت ادامه پیدا می‌کند"
+          glslViewer --version || true
 
-      # ۴. نصب ابزار glue (ساخت HTML)
-      - name: ⚙️ نصب glue
+      # ۴. نصب کتابخانه‌های پایتون (نسخه جدید)
+      - name: ⚙️ نصب نیازمندی‌های Python
+        run: pip3 install markdown
+
+      # ۵. ساخت کل کتاب (PDF + EPUB + HTML) داخل نمایشگر مجازی
+      - name: 📄 ساخت کامل کتاب
+        run: xvfb-run make all
+
+      # ۶. انتقال خروجی‌های HTML به پوشه‌ای برای آرشیو
+      - name: 🌐 آماده‌سازی نسخه HTML آفلاین
         run: |
-          GLUE_VERSION="0.14.2"
-          wget -q "https://github.com/MattesGroeger/glue/releases/download/v${GLUE_VERSION}/glue_${GLUE_VERSION}_Linux_x86_64.tar.gz" -O glue.tar.gz
-          tar -xzf glue.tar.gz
-          sudo cp glue /usr/local/bin/
-          glue --version || echo "glue نصب شد"
+          # پوشه‌ی _site حاصل glue است (اگر نبود، از make html ساخته می‌شود)
+          mkdir -p website_mirror
+          if [ -d "_site" ]; then
+            cp -r _site/* website_mirror/
+          fi
 
-      # ۵. نصب کتابخانه‌های پایتون
-      - name: 🐍 نصب pip
-        run: pip3 install --user markdown
-
-      # ۶. ساخت PDF (با پشتیبانی از کارت گرافیک مجازی)
-      - name: 📄 تولید PDF کتاب
-        run: xvfb-run make clean pdf
-
-      # ۷. ساخت سایت HTML آفلاین
-      - name: 🌐 ساخت نسخه HTML
-        run: glue build glue.json
-
-      # ۸. انتقال خروجی‌ها به محل نهایی
-      - name: 📁 مرتب‌سازی خروجی‌ها
-        run: |
-          # PDF از قبل در ریشه هست
-          # پوشه HTML:
-          mkdir -p output
-          cp book.pdf output/
-          cp -r _site output/website_mirror
-
-      # ۹. کامیت و پوش خروجی‌ها
-      - name: 💾 کامیت فایل‌ها
+      # ۷. ذخیره‌سازی همه خروجی‌ها در مخزن
+      - name: 💾 کامیت PDF و HTML
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '🎉 کتاب ساخته شد (PDF + HTML)'
-          file_pattern: 'book.pdf output/* _site/*'
+          commit_message: '🎉 کتاب ساخته شد (PDF و HTML)'
+          file_pattern: 'book.pdf book.epub website_mirror/*'
           commit_user_name: 'GitHub Action'
           commit_user_email: 'action@github.com'
