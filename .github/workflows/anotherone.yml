@@ -1,49 +1,57 @@
-name: 📘 ساخت PDF و HTML کتاب (نسخه نهایی و تضمینی)
+name: 📘 ساخت کتاب (PDF + HTML) – نسخه قطعی
 
 on:
-  workflow_dispatch:          # دکمه دستی اضافه شد
-  push:
-    tags:
-      - v*
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest    # آخرین اوبونتو (24.04)
+    runs-on: ubuntu-latest
     steps:
-      - name: 📥 دریافت کد کتاب
+      - name: 📥 دریافت کد
         uses: actions/checkout@v4
 
-      - name: 🧰 نصب بسته‌های سیستم
+      - name: 🧰 نصب همهٔ بسته‌های لازم
         run: |
           sudo apt-get update
-          # ابزارهای ساخت کتاب
-          sudo apt-get install -y texlive-xetex texlive-latex-extra texlive-fonts-recommended pandoc python3 python3-pip make wget
-          # کتابخانه‌های گرافیکی برای اجرای شیدرها (libgl1 جایگزین libgl1-mesa-glx قدیمی)
+          # ابزارهای ساخت
+          sudo apt-get install -y texlive-xetex texlive-latex-extra texlive-fonts-recommended pandoc make wget
+          # پایتون (نیاز کتاب به python و pip)
+          sudo apt-get install -y python3 python3-pip python-is-python3
+          pip3 install markdown
+          # کتابخانه‌های گرافیکی و Xvfb
           sudo apt-get install -y libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libgl1 libglfw3 xvfb
-          # نصب glslViewer
+          # نصب glslViewer از ریلیز گیت‌هاب (بدون نیاز به اینترنت بیرون)
           GLSL_VERSION="3.5.2"
           wget -q "https://github.com/patriciogonzalezvivo/glslViewer/releases/download/${GLSL_VERSION}/glslViewer-${GLSL_VERSION}-amd64.deb" -O glslViewer.deb
-          mkdir -p glsl_extract
           dpkg-deb -x glslViewer.deb glsl_extract
           sudo cp glsl_extract/usr/bin/glslViewer /usr/local/bin/
-          # نیازمندی‌های پایتونی
-          pip3 install markdown
 
-      - name: 📄 ساخت کامل کتاب (PDF + HTML + EPUB)
-        run: xvfb-run make all
+      - name: 📄 ساخت PDF کتاب
+        run: xvfb-run make pdf
 
-      - name: 📁 انتقال فایل‌ها برای کامیت
+      - name: 🌐 ساخت HTML کتاب
+        run: make html   # این دستور glue را از پوشه glue/ می‌سازد و سایت را تولید می‌کند
+
+      - name: 📋 بررسی خروجی‌ها
         run: |
-          mkdir -p website_mirror
-          # وب‌سایت ساخته‌شده معمولاً در پوشه _site است
-          if [ -d "_site" ]; then
-            cp -r _site/* website_mirror/
-          fi
+          echo "=== فایل‌های PDF و EPUB ==="
+          ls -l book.pdf book.epub 2>/dev/null || echo "فایل PDF/EPUB پیدا نشد"
+          echo "=== محتوای پوشه _site (HTML) ==="
+          ls -lR _site/ 2>/dev/null || echo "پوشه _site خالی یا موجود نیست"
 
-      - name: 💾 ذخیره‌سازی در مخزن
+      - name: 📁 آماده‌سازی برای کامیت
+        run: |
+          mkdir -p output
+          # کپی PDF و EPUB اگر ساخته شده باشند
+          [ -f book.pdf ] && cp book.pdf output/
+          [ -f book.epub ] && cp book.epub output/
+          # کپی وبسایت HTML
+          [ -d "_site" ] && cp -r _site output/website_mirror
+
+      - name: 💾 ذخیره در مخزن
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '📚 PDF و HTML کتاب به‌روزرسانی شد'
-          file_pattern: 'book.pdf book.epub website_mirror/*'
+          commit_message: '📚 کتاب ساخته شد (PDF + HTML)'
+          file_pattern: 'output/*'
           commit_user_name: 'GitHub Action'
           commit_user_email: 'action@github.com'
