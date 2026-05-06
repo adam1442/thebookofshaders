@@ -1,0 +1,72 @@
+name: 📘 ساخت PDF و HTML کتاب (روی فورک)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ۱. دریافت کدهای کتاب از فورک
+      - name: 📥 Checkout فورک
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ۲. بسته‌های اصلی
+      - name: 🧰 نصب بسته‌های سیستم
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            texlive-xetex texlive-latex-extra texlive-fonts-recommended \
+            pandoc python3 make wget gettext binutils xvfb
+
+      # ۳. نصب glslViewer (نسخه ۳.۵.۲)
+      - name: 🎨 نصب glslViewer
+        run: |
+          GLSL_VERSION="3.5.2"
+          wget -q "https://github.com/patriciogonzalezvivo/glslViewer/releases/download/${GLSL_VERSION}/glslViewer-${GLSL_VERSION}-amd64.deb" -O glslViewer.deb
+          mkdir -p glsl_extract
+          dpkg-deb -x glslViewer.deb glsl_extract
+          sudo cp glsl_extract/usr/bin/glslViewer /usr/local/bin/
+          glslViewer --version || echo "⚠️ هشدار: glslViewer نتیجه نداد، ولی ساخت ادامه پیدا می‌کند"
+
+      # ۴. نصب ابزار glue (ساخت HTML)
+      - name: ⚙️ نصب glue
+        run: |
+          GLUE_VERSION="0.14.2"
+          wget -q "https://github.com/MattesGroeger/glue/releases/download/v${GLUE_VERSION}/glue_${GLUE_VERSION}_Linux_x86_64.tar.gz" -O glue.tar.gz
+          tar -xzf glue.tar.gz
+          sudo cp glue /usr/local/bin/
+          glue --version || echo "glue نصب شد"
+
+      # ۵. نصب کتابخانه‌های پایتون
+      - name: 🐍 نصب pip
+        run: pip3 install --user markdown
+
+      # ۶. ساخت PDF (با پشتیبانی از کارت گرافیک مجازی)
+      - name: 📄 تولید PDF کتاب
+        run: xvfb-run make clean pdf
+
+      # ۷. ساخت سایت HTML آفلاین
+      - name: 🌐 ساخت نسخه HTML
+        run: glue build glue.json
+
+      # ۸. انتقال خروجی‌ها به محل نهایی
+      - name: 📁 مرتب‌سازی خروجی‌ها
+        run: |
+          # PDF از قبل در ریشه هست
+          # پوشه HTML:
+          mkdir -p output
+          cp book.pdf output/
+          cp -r _site output/website_mirror
+
+      # ۹. کامیت و پوش خروجی‌ها
+      - name: 💾 کامیت فایل‌ها
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: '🎉 کتاب ساخته شد (PDF + HTML)'
+          file_pattern: 'book.pdf output/* _site/*'
+          commit_user_name: 'GitHub Action'
+          commit_user_email: 'action@github.com'
