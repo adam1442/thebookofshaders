@@ -1,0 +1,49 @@
+name: 📘 ساخت PDF و HTML کتاب (نسخه نهایی و تضمینی)
+
+on:
+  workflow_dispatch:          # دکمه دستی اضافه شد
+  push:
+    tags:
+      - v*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest    # آخرین اوبونتو (24.04)
+    steps:
+      - name: 📥 دریافت کد کتاب
+        uses: actions/checkout@v4
+
+      - name: 🧰 نصب بسته‌های سیستم
+        run: |
+          sudo apt-get update
+          # ابزارهای ساخت کتاب
+          sudo apt-get install -y texlive-xetex texlive-latex-extra texlive-fonts-recommended pandoc python3 python3-pip make wget
+          # کتابخانه‌های گرافیکی برای اجرای شیدرها (libgl1 جایگزین libgl1-mesa-glx قدیمی)
+          sudo apt-get install -y libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libgl1 libglfw3 xvfb
+          # نصب glslViewer
+          GLSL_VERSION="3.5.2"
+          wget -q "https://github.com/patriciogonzalezvivo/glslViewer/releases/download/${GLSL_VERSION}/glslViewer-${GLSL_VERSION}-amd64.deb" -O glslViewer.deb
+          mkdir -p glsl_extract
+          dpkg-deb -x glslViewer.deb glsl_extract
+          sudo cp glsl_extract/usr/bin/glslViewer /usr/local/bin/
+          # نیازمندی‌های پایتونی
+          pip3 install markdown
+
+      - name: 📄 ساخت کامل کتاب (PDF + HTML + EPUB)
+        run: xvfb-run make all
+
+      - name: 📁 انتقال فایل‌ها برای کامیت
+        run: |
+          mkdir -p website_mirror
+          # وب‌سایت ساخته‌شده معمولاً در پوشه _site است
+          if [ -d "_site" ]; then
+            cp -r _site/* website_mirror/
+          fi
+
+      - name: 💾 ذخیره‌سازی در مخزن
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: '📚 PDF و HTML کتاب به‌روزرسانی شد'
+          file_pattern: 'book.pdf book.epub website_mirror/*'
+          commit_user_name: 'GitHub Action'
+          commit_user_email: 'action@github.com'
