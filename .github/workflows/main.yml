@@ -18,7 +18,7 @@ jobs:
       - name: 🧰 نصب بسته‌های سیستم
         run: |
           sudo apt-get update
-          sudo apt-get install -y mesa-utils libglfw3 libgl1-mesa-glx
+          sudo apt-get install -y mesa-utils libglfw3 libgl1
           # ابزارهای اصلی ساخت PDF و EPUB
           sudo apt-get install -y texlive-xetex texlive-latex-extra texlive-fonts-recommended pandoc python3 python3-pip make wget
           # کتابخانه‌های X11 برای glslViewer
@@ -41,7 +41,10 @@ jobs:
       # ۵. ساخت کل کتاب (PDF + EPUB + HTML) داخل نمایشگر مجازی
       - name: 📄 ساخت کامل کتاب
         run: |
-          cd glue && go mod init glue && go build -o glue . && cd ..
+          cd glue
+          go build -o glue .
+          sudo cp glue /usr/local/bin/
+          cd ..
           xvfb-run make all
 
       # ۶. انتقال خروجی‌های HTML به پوشه‌ای برای آرشیو
