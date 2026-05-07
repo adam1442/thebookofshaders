@@ -35,19 +35,19 @@ jobs:
         run: xvfb-run make pdf
 
       # ۴. ساخت نسخه HTML آفلاین (دقیقاً مطابق Appendix 00)
-      - name: 🌐 ساخت سایت HTML
-        run: |
+     # - name: 🌐 ساخت سایت HTML
+       # run: |
           # راه‌اندازی سرور PHP داخلی روی پورت 8000 در پس‌زمینه
-          php -S localhost:8000 > /dev/null 2>&1 &
-          sleep 3
+        #  php -S localhost:8000 > /dev/null 2>&1 &
+         # sleep 3
           # آینه کردن وب‌سایت
-          mkdir -p website_mirror
-          cd website_mirror
-          wget --mirror --convert-links --adjust-extension --no-parent --wait=1 --random-wait http://localhost:8000/ || true
-          if [ -d "localhost:8000" ]; then
-            mv localhost:8000/* .
-            rm -rf localhost:8000
-          fi
+         # mkdir -p website_mirror
+         # cd website_mirror
+         # wget --mirror --convert-links --adjust-extension --no-parent --wait=1 --random-wait http://localhost:8000/ || true
+         # if [ -d "localhost:8000" ]; then
+          #  mv localhost:8000/* .
+           # rm -rf localhost:8000
+         # fi
 
       # ۵. ذخیره‌سازی خروجی‌ها
       - name: 💾 کامیت فایل‌ها
